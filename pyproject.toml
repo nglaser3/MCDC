@@ -88,3 +88,28 @@ Homepage = "https://cement-psaap.github.io/"
 Repository = "https://github.com/CEMeNT-PSAAP/MCDC"
 Documentation = "https://mcdc.readthedocs.io/en/latest/"
 Issues = "https://github.com/CEMeNT-PSAAP/MCDC/issues"
+
+[tool.pytest.ini_options]
+minversion="9.0"
+# CLI default args
+addopts = [
+  "-ra",
+  "-m", "not slow",
+]
+# Discovery
+testpaths=["test"]
+python_files = [
+  "*_test.py",
+  "test_*.py",
+]
+# Test markers
+strict_config = true
+strict_markers = true
+markers = [
+  "unit", 
+  "regression",
+  "slow"
+]
+# Output and pytest cache
+console_output_style="times"
+cache_dir = "test/.pytest_cache"
