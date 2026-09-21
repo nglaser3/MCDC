@@ -16,10 +16,12 @@ from mcdc.constant import (
     DISTRIBUTION_N_BODY,
     DISTRIBUTION_TABULATED,
     DISTRIBUTION_TABULATED_ENERGY_ANGLE,
+    INTERPOLATION_HISTOGRAM,
+    INTERPOLATION_LINEAR,
     PI,
 )
-from mcdc.transport.data import evaluate_table
-from mcdc.transport.util import find_bin, linear_interpolation
+from mcdc.transport.data import evaluate_data
+from mcdc.transport.util import find_bin
 
 # ======================================================================================
 # General distribution samplers
@@ -38,16 +40,16 @@ def sample_distribution_with_scale(E, distribution, rng_state, simulation, data)
 
 @njit
 def _sample_distribution(E, distribution, rng_state, simulation, data, scale):
-    distribution_type = distribution["child_type"]
-    ID = distribution["child_ID"]
+    distribution_type = distribution["sub_type"]
+    ID = distribution["sub_ID"]
 
     if distribution_type == DISTRIBUTION_TABULATED:
         table = simulation["tabulated_distributions"][ID]
-        return sample_tabulated(table, rng_state, data)
+        return sample_tabulated(table, rng_state, simulation, data)
 
     elif distribution_type == DISTRIBUTION_MULTITABLE:
         multi_table = simulation["multi_table_distributions"][ID]
-        return _sample_multi_table(E, rng_state, multi_table, data, scale)
+        return _sample_multi_table(E, rng_state, multi_table, simulation, data, scale)
 
     elif distribution_type == DISTRIBUTION_LEVEL_SCATTERING:
         level_scattering = simulation["level_scattering_distributions"][ID]
@@ -86,8 +88,8 @@ def sample_correlated_distribution_with_scale(
 def _sample_correlated_distribution(
     E, distribution, rng_state, simulation, data, scale
 ):
-    distribution_type = distribution["child_type"]
-    ID = distribution["child_ID"]
+    distribution_type = distribution["sub_type"]
+    ID = distribution["sub_ID"]
 
     if distribution_type == DISTRIBUTION_KALBACH_MANN:
         kalbach_mann = simulation["kalbach_mann_distributions"][ID]
@@ -99,7 +101,7 @@ def _sample_correlated_distribution(
 
     elif distribution_type == DISTRIBUTION_N_BODY:
         nbody = simulation["nbody_distributions"][ID]
-        E_out = sample_tabulated(nbody, rng_state, data)
+        E_out = sample_tabulated(nbody, rng_state, simulation, data)
         mu = sample_isotropic_cosine(rng_state)
         return E_out, mu
 
@@ -148,6 +150,10 @@ def sample_direction(polar_cosine, azimuthal, polar_coordinate, rng_state):
     wy = polar_coordinate[1]
     wz = polar_coordinate[2]
     if abs(wz) >= 0.999:
+        # Axis nearly parallel to z: use a fixed transverse basis
+        ux, uy, uz = 1.0, 0.0, 0.0
+        vx, vy, vz = 0.0, 1.0, 0.0
+    else:
         inv = 1.0 / math.sqrt(wx * wx + wy * wy)
 
         ux = -wy * inv
@@ -157,10 +163,6 @@ def sample_direction(polar_cosine, azimuthal, polar_coordinate, rng_state):
         vx = -wz * wx * inv
         vy = -wz * wy * inv
         vz = math.sqrt(wx * wx + wy * wy)
-    else:
-        # Axis nearly parallel to z
-        ux, uy, uz = 1.0, 0.0, 0.0
-        vx, vy, vz = 0.0, 1.0, 0.0
 
     # Rotate into lab frame
     s = math.sqrt(max(0.0, 1.0 - mu * mu))
@@ -174,30 +176,78 @@ def sample_direction(polar_cosine, azimuthal, polar_coordinate, rng_state):
 
 
 @njit
-def sample_tabulated(table, rng_state, data):
+def sample_tabulated(table, rng_state, simulation, data):
+    """
+    Sample a value from a tabulated distribution.
+    """
+
+    pdf_data = simulation["data"][table["pdf_ID"]]
+    pdf_table = simulation["table_data"][pdf_data["sub_ID"]]
+
+    cdf = mcdc_get.table_data.aux_vector(0, pdf_table, data)
+
     xi = rng.lcg(rng_state)
-
-    offset = table["cdf_offset"]
-    length = table["cdf_length"]
-    cdf = data[offset : offset + length]
-    # Above is equivalent to: cdf = mcdc_get.tabulated_distribution.cdf_all(table, data)
-
     idx = find_bin(xi, cdf)
-    cdf_low = mcdc_get.tabulated_distribution.cdf(idx, table, data)
-    cdf_high = mcdc_get.tabulated_distribution.cdf(idx + 1, table, data)
-    value_low = mcdc_get.tabulated_distribution.value(idx, table, data)
-    value_high = mcdc_get.tabulated_distribution.value(idx + 1, table, data)
-    return linear_interpolation(xi, cdf_low, cdf_high, value_low, value_high)
+
+    c0 = mcdc_get.table_data.aux(0, idx, pdf_table, data)
+
+    p0 = mcdc_get.table_data.y(idx, pdf_table, data)
+    p1 = mcdc_get.table_data.y(idx + 1, pdf_table, data)
+
+    v0 = mcdc_get.table_data.x(idx, pdf_table, data)
+    v1 = mcdc_get.table_data.x(idx + 1, pdf_table, data)
+
+    # Tabulated pdfs are either histogram or linear.
+    interpolation = mcdc_get.table_data.interpolations(0, pdf_table, data)
+
+    return invert_tabulated_segment(
+        xi,
+        c0,
+        v0,
+        v1,
+        p0,
+        p1,
+        interpolation,
+    )
+
+
+@njit
+def invert_tabulated_segment(xi, c0, v0, v1, p0, p1, interpolation):
+    """Invert one histogram or linear PDF segment."""
+
+    s = xi - c0
+
+    if interpolation == INTERPOLATION_HISTOGRAM:
+        if p0 <= 0.0:
+            return v0
+        return v0 + s / p0
+
+    elif interpolation == INTERPOLATION_LINEAR:
+        dv = v1 - v0
+        dp = p1 - p0
+
+        if abs(dp) <= 1.0e-12 * max(abs(p0), abs(p1), 1.0):
+            if p0 <= 0.0:
+                return v0
+            return v0 + s / p0
+
+        m = dp / dv
+        disc = p0 * p0 + 2.0 * m * s
+
+        if disc < 0.0:
+            disc = 0.0
+
+        return v0 + (math.sqrt(disc) - p0) / m
+
+    else:
+        # Distribution tables should only use histogram or linear interpolation.
+        return v0
 
 
 @njit
 def sample_pmf(pmf, rng_state, data):
     xi = rng.lcg(rng_state)
-
-    offset = pmf["cmf_offset"]
-    length = pmf["cmf_length"]
-    cmf = data[offset : offset + length]
-    # Above is equivalent to: cmf = mcdc_get.pmf_distribution.cmf_all(pmf, data)
+    cmf = mcdc_get.pmf_distribution.cmf_all(pmf, data)
 
     idx = find_bin(xi, cmf)
     return mcdc_get.pmf_distribution.value(idx, pmf, data)
@@ -214,7 +264,7 @@ def sample_white_direction(nx, ny, nz, rng_state):
     sin_azi = math.sin(azi)
     Ac = (1.0 - mu**2) ** 0.5
 
-    if nz != 1.0:
+    if abs(nz) != 1.0:
         B = (1.0 - nz**2) ** 0.5
         C = Ac / B
 
@@ -234,115 +284,105 @@ def sample_white_direction(nx, ny, nz, rng_state):
 
 
 @njit
-def sample_multi_table(E, rng_state, multi_table, data):
-    return _sample_multi_table(E, rng_state, multi_table, data, False)
+def sample_multi_table(E, rng_state, multi_table, simulation, data):
+    return _sample_multi_table(E, rng_state, multi_table, simulation, data, False)
 
 
 @njit
-def _sample_multi_table(E, rng_state, multi_table, data, scale):
-    offset = multi_table["grid_offset"]
-    length = multi_table["grid_length"]
-    grid = data[offset : offset + length]
-    # Above is equivalent to: grid = mcdc_get.multi_table_distribution.grid_all(multi_table, data)
+def _sample_multi_table(E, rng_state, multi_table, simulation, data, scale):
+    """Sample from a multi-table distribution."""
 
-    # Edge cases
+    # Get the grid
+    grid = mcdc_get.multi_table_distribution.grid_all(multi_table, data)
+
+    # Helper flag for scaling later
+    use_next_table = False
+
+    # Default interpolation factor
+    f = 0.0
+
+    # Below grid: use first table without unit-base scaling.
     if E < grid[0]:
         idx = 0
         scale = False
+
+    # Above grid: use last table without unit-base scaling.
     elif E > grid[-1]:
         idx = len(grid) - 1
         scale = False
+
+    # Pick the table
     else:
-        # Interpolation factor
+        # Calculate Interpolation factor
         idx = find_bin(E, grid)
         E0 = grid[idx]
         E1 = grid[idx + 1]
         f = (E - E0) / (E1 - E0)
 
-        # Min and max values for scaling
-        val_min = 0.0
-        val_max = 1.0
-        if scale:
-            # First table
-            start = int(
-                mcdc_get.multi_table_distribution.offset(idx, multi_table, data)
-            )
-            end = int(
-                mcdc_get.multi_table_distribution.offset(idx + 1, multi_table, data)
-            )
-            val0_min = mcdc_get.multi_table_distribution.value(start, multi_table, data)
-            val0_max = mcdc_get.multi_table_distribution.value(
-                end - 1, multi_table, data
-            )
-
-            # Second table
-            start = end
-            if idx + 2 == len(grid):
-                end = multi_table["value_length"]
-            else:
-                end = int(
-                    mcdc_get.multi_table_distribution.offset(idx + 2, multi_table, data)
-                )
-            val1_min = mcdc_get.multi_table_distribution.value(start, multi_table, data)
-            val1_max = mcdc_get.multi_table_distribution.value(
-                end - 1, multi_table, data
-            )
-
-            # Both
-            val_min = val0_min + f * (val1_min - val0_min)
-            val_max = val0_max + f * (val1_max - val0_max)
-
         # Sample which table to choose
         if rng.lcg(rng_state) < f:
             idx += 1
+            use_next_table = True  # For scaling later if needed
 
-    # Get the table range
-    start = int(mcdc_get.multi_table_distribution.offset(idx, multi_table, data))
-    if idx + 1 == len(grid):
-        end = multi_table["value_length"]
-    else:
-        end = int(mcdc_get.multi_table_distribution.offset(idx + 1, multi_table, data))
-    size = end - start
+    # Sample from the selected table
+    ID = mcdc_get.multi_table_distribution.table_IDs(idx, multi_table, data)
+    sub_ID = simulation["distributions"][ID]["sub_ID"]
+    table_distribution = simulation["tabulated_distributions"][sub_ID]
+    sample = sample_tabulated(table_distribution, rng_state, simulation, data)
 
-    # The CDF
-    offset = multi_table["cdf_offset"]
-    cdf = data[start + offset : start + offset + size]
-    # Above is equivalent to: cdf = mcdc_get.multi_table_distribution.cdf_chunk(start, size, multi_table, data)
-
-    # Generate random numbers
-    xi = rng.lcg(rng_state)
-
-    # Sample bin index
-    idx = find_bin(xi, cdf)
-    c = cdf[idx]
-
-    # Get the other values
-    idx += start  # Apply the offset as these are not chunk-extracted like the cdf
-    p0 = mcdc_get.multi_table_distribution.pdf(idx, multi_table, data)
-    p1 = mcdc_get.multi_table_distribution.pdf(idx + 1, multi_table, data)
-    val0 = mcdc_get.multi_table_distribution.value(idx, multi_table, data)
-    val1 = mcdc_get.multi_table_distribution.value(idx + 1, multi_table, data)
-
-    m = (p1 - p0) / (val1 - val0)
-    if m == 0.0:
-        sample = val0 + (xi - c) / p0
-    else:
-        sample = val0 + 1.0 / m * (math.sqrt(p0**2 + 2 * m * (xi - c)) - p0)
-
+    # No scaling needed?
     if not scale:
         return sample
 
-    # Scale against the bounds
-    val_low = mcdc_get.multi_table_distribution.value(start, multi_table, data)
-    val_high = mcdc_get.multi_table_distribution.value(end - 1, multi_table, data)
+    # Retrieve the interval index
+    if use_next_table:
+        idx -= 1
+
+    # PDF tables
+    ID0 = mcdc_get.multi_table_distribution.table_IDs(idx, multi_table, data)
+    ID1 = mcdc_get.multi_table_distribution.table_IDs(idx + 1, multi_table, data)
+    #
+    sub_ID0 = simulation["distributions"][ID0]["sub_ID"]
+    sub_ID1 = simulation["distributions"][ID1]["sub_ID"]
+    #
+    table_distribution0 = simulation["tabulated_distributions"][sub_ID0]
+    table_distribution1 = simulation["tabulated_distributions"][sub_ID1]
+    #
+    ID = table_distribution["pdf_ID"]
+    ID0 = table_distribution0["pdf_ID"]
+    ID1 = table_distribution1["pdf_ID"]
+    #
+    sub_ID = simulation["data"][ID]["sub_ID"]
+    sub_ID0 = simulation["data"][ID0]["sub_ID"]
+    sub_ID1 = simulation["data"][ID1]["sub_ID"]
+    #
+    table = simulation["table_data"][sub_ID]
+    table0 = simulation["table_data"][sub_ID0]
+    table1 = simulation["table_data"][sub_ID1]
+
+    # Table's min
+    val_min0 = mcdc_get.table_data.x(0, table0, data)
+    val_min1 = mcdc_get.table_data.x(0, table1, data)
+
+    # Table's max
+    val_max0 = mcdc_get.table_data.x_last(table0, data)
+    val_max1 = mcdc_get.table_data.x_last(table1, data)
+
+    # The effective min and max
+    val_min = val_min0 + f * (val_min1 - val_min0)
+    val_max = val_max0 + f * (val_max1 - val_max0)
+
+    # The sampled table's min and max
+    val_low = mcdc_get.table_data.x(0, table, data)
+    val_high = mcdc_get.table_data.x_last(table, data)
     return val_min + (sample - val_low) / (val_high - val_low) * (val_max - val_min)
 
 
 @njit
 def sample_maxwellian(E, rng_state, maxwellian, simulation, data):
     # Get nuclear temperature
-    table = simulation["table_data"][maxwellian["nuclear_temperature_ID"]]
-    nuclear_temperature = evaluate_table(E, table, data)
+    table = simulation["data"][maxwellian["nuclear_temperature_ID"]]
+    nuclear_temperature = evaluate_data(E, table, simulation, data)
     restriction_energy = maxwellian["restriction_energy"]
 
     # Rejection sampling
@@ -371,8 +411,8 @@ def sample_level_scattering(E, level_scattering):
 @njit
 def sample_evaporation(E, rng_state, evaporation, simulation, data):
     # Get nuclear temperature
-    table = simulation["table_data"][evaporation["nuclear_temperature_ID"]]
-    nuclear_temperature = evaluate_table(E, table, data)
+    table = simulation["data"][evaporation["nuclear_temperature_ID"]]
+    nuclear_temperature = evaluate_data(E, table, simulation, data)
     restriction_energy = evaporation["restriction_energy"]
 
     w = (E - restriction_energy) / nuclear_temperature
@@ -393,10 +433,7 @@ def sample_evaporation(E, rng_state, evaporation, simulation, data):
 
 @njit
 def sample_kalbach_mann(E, rng_state, kalbach_mann, data):
-    offset = kalbach_mann["energy_offset"]
-    length = kalbach_mann["energy_length"]
-    grid = data[offset : offset + length]
-    # Above is equivalent to: grid = mcdc_get.kalbach_mann_distribution.energy_all(kalbach_mann, data)
+    grid = mcdc_get.kalbach_mann_distribution.energy_all(kalbach_mann, data)
 
     # Random numbers
     xi1 = rng.lcg(rng_state)
@@ -415,8 +452,8 @@ def sample_kalbach_mann(E, rng_state, kalbach_mann, data):
     # ==================================================================================
 
     # First table
-    start = int(mcdc_get.kalbach_mann_distribution.offset(idx, kalbach_mann, data))
-    end = int(mcdc_get.kalbach_mann_distribution.offset(idx + 1, kalbach_mann, data))
+    start = mcdc_get.kalbach_mann_distribution.offset(idx, kalbach_mann, data)
+    end = mcdc_get.kalbach_mann_distribution.offset(idx + 1, kalbach_mann, data)
     E0_min = mcdc_get.kalbach_mann_distribution.energy_out(start, kalbach_mann, data)
     E0_max = mcdc_get.kalbach_mann_distribution.energy_out(end - 1, kalbach_mann, data)
 
@@ -425,9 +462,7 @@ def sample_kalbach_mann(E, rng_state, kalbach_mann, data):
     if idx + 2 == len(grid):
         end = kalbach_mann["energy_length"]
     else:
-        end = int(
-            mcdc_get.kalbach_mann_distribution.offset(idx + 2, kalbach_mann, data)
-        )
+        end = mcdc_get.kalbach_mann_distribution.offset(idx + 2, kalbach_mann, data)
     E1_min = mcdc_get.kalbach_mann_distribution.energy_out(start, kalbach_mann, data)
     E1_max = mcdc_get.kalbach_mann_distribution.energy_out(end - 1, kalbach_mann, data)
 
@@ -440,19 +475,15 @@ def sample_kalbach_mann(E, rng_state, kalbach_mann, data):
         idx += 1
 
     # Get the table range
-    start = int(mcdc_get.kalbach_mann_distribution.offset(idx, kalbach_mann, data))
+    start = mcdc_get.kalbach_mann_distribution.offset(idx, kalbach_mann, data)
     if idx + 1 == len(grid):
         end = kalbach_mann["energy_length"]
     else:
-        end = int(
-            mcdc_get.kalbach_mann_distribution.offset(idx + 1, kalbach_mann, data)
-        )
+        end = mcdc_get.kalbach_mann_distribution.offset(idx + 1, kalbach_mann, data)
     size = end - start
 
     # The CDF
-    offset = kalbach_mann["cdf_offset"]
-    cdf = data[start + offset : start + offset + size]
-    # Above is equivalent to: cdf = mcdc_get.kalbach_mann_distribution.cdf_chunk(start, size, kalbach_mann, data)
+    cdf = mcdc_get.kalbach_mann_distribution.cdf_chunk(start, size, kalbach_mann, data)
 
     # Sample bin index
     idx = find_bin(xi2, cdf)
@@ -501,10 +532,7 @@ def sample_kalbach_mann(E, rng_state, kalbach_mann, data):
 
 @njit
 def sample_tabulated_energy_angle(E, rng_state, table, data):
-    offset = table["energy_offset"]
-    length = table["energy_length"]
-    grid = data[offset : offset + length]
-    # Above is equivalent to: grid = mcdc_get.tabulated_energy_angle_distribution.energy_all(table, data)
+    grid = mcdc_get.tabulated_energy_angle_distribution.energy_all(table, data)
 
     # Random numbers
     xi1 = rng.lcg(rng_state)
@@ -522,8 +550,8 @@ def sample_tabulated_energy_angle(E, rng_state, table, data):
     # ==================================================================================
 
     # First table
-    start = int(mcdc_get.tabulated_energy_angle_distribution.offset(idx, table, data))
-    end = int(mcdc_get.tabulated_energy_angle_distribution.offset(idx + 1, table, data))
+    start = mcdc_get.tabulated_energy_angle_distribution.offset(idx, table, data)
+    end = mcdc_get.tabulated_energy_angle_distribution.offset(idx + 1, table, data)
     E0_min = mcdc_get.tabulated_energy_angle_distribution.energy_out(start, table, data)
     E0_max = mcdc_get.tabulated_energy_angle_distribution.energy_out(
         end - 1, table, data
@@ -534,9 +562,7 @@ def sample_tabulated_energy_angle(E, rng_state, table, data):
     if idx + 2 == len(grid):
         end = table["energy_length"]
     else:
-        end = int(
-            mcdc_get.tabulated_energy_angle_distribution.offset(idx + 2, table, data)
-        )
+        end = mcdc_get.tabulated_energy_angle_distribution.offset(idx + 2, table, data)
     E1_min = mcdc_get.tabulated_energy_angle_distribution.energy_out(start, table, data)
     E1_max = mcdc_get.tabulated_energy_angle_distribution.energy_out(
         end - 1, table, data
@@ -551,22 +577,17 @@ def sample_tabulated_energy_angle(E, rng_state, table, data):
         idx += 1
 
     # Get the table range
-    start = int(mcdc_get.tabulated_energy_angle_distribution.offset(idx, table, data))
+    start = mcdc_get.tabulated_energy_angle_distribution.offset(idx, table, data)
     if idx + 1 == len(grid):
         end = table["energy_length"]
     else:
-        end = int(
-            mcdc_get.tabulated_energy_angle_distribution.offset(idx + 1, table, data)
-        )
+        end = mcdc_get.tabulated_energy_angle_distribution.offset(idx + 1, table, data)
     size = end - start
 
     # The CDF
-    offset = table["cdf_offset"]
-    cdf = data[start + offset : start + offset + size]
-    # Above is equivalent to:
-    # cdf = mcdc_get.tabulated_energy_angle_distribution.cdf_chunk(
-    #     start, size, table, data
-    # )
+    cdf = mcdc_get.tabulated_energy_angle_distribution.cdf_chunk(
+        start, size, table, data
+    )
 
     # Sample bin index
     idx = find_bin(xi2, cdf)
@@ -602,26 +623,21 @@ def sample_tabulated_energy_angle(E, rng_state, table, data):
         idx += 1
 
     # Get the angular table range
-    start = int(
-        mcdc_get.tabulated_energy_angle_distribution.cosine_offset_(idx, table, data)
+    start = mcdc_get.tabulated_energy_angle_distribution.cosine_offset_(
+        idx, table, data
     )
     if idx + 1 == len(grid):
         end = table["cosine_length"]
     else:
-        end = int(
-            mcdc_get.tabulated_energy_angle_distribution.cosine_offset_(
-                idx + 1, table, data
-            )
+        end = mcdc_get.tabulated_energy_angle_distribution.cosine_offset_(
+            idx + 1, table, data
         )
     size = end - start
 
     # The CDF
-    offset = table["cosine_cdf_offset"]
-    cdf = data[start + offset : start + offset + size]
-    # Above is equivalent to:
-    # cdf = mcdc_get.tabulated_energy_angle_distribution.cosine_cdf_chunk(
-    #     start, size, table, data
-    # )
+    cdf = mcdc_get.tabulated_energy_angle_distribution.cosine_cdf_chunk(
+        start, size, table, data
+    )
 
     # Sample bin index
     idx = find_bin(xi3, cdf)

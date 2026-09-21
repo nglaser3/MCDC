@@ -1,82 +1,97 @@
-.. MC/DC documentation master file
+:html_theme.sidebar_secondary.remove: true
 
 ======================================
 MC/DC: Monte Carlo Dynamic Code
 ======================================
 
-MC/DC is a performant, scalable, and portable Python-based Monte Carlo radiation 
-transport software package. It is purpose-built as a rapid methods development 
-platform capable of leveraging modern high-performance computing systems, supporting 
-both CPUs and GPUs.
+MC/DC is an open-source, Python-based Monte Carlo radiation transport software
+package for rapid methods development and scalable execution on CPUs, GPUs,
+and modern high-performance computing systems. New to the project? Begin with
+:doc:`What is MC/DC? <user_guide/getting_started/what_is_mcdc>`.
 
-MC/DC supports continuous-energy and multi-group neutron transport calculations. It is 
-capable of running fixed-source and eigenvalue transport simulations on models built 
-from constructive solid geometry. For continuous-energy neutron transport, 
-MC/DC translates `ACE <https://nucleardata.lanl.gov/ace/>`_ nuclear data libraries into 
-its native `HDF5 <https://www.hdfgroup.org/solutions/hdf5/>`_ format. Photon, electron, 
-and charged-particle transport are currently under development, with the goal of making 
-MC/DC a multi-radiation/particle transport software package.
+-------------
+Documentation
+-------------
 
-While MC/DC's Python environment promotes rapid iterative testing of ideas, its 
-Numba-based compilation framework improves runtime performance and enables portability. 
-`Harmonize <https://github.com/CEMeNT-PSAAP/harmonize>`_ serves as the GPU execution 
-framework, optimizing device utilization within stochastic simulations; and 
-`MPI4Py <https://mpi4py.readthedocs.io/en/stable/>`_ is used to achieve parallel 
-scalability across nodes in large computer clusters. In addition to running on commonly 
-used desktops and workstations, MC/DC has been tested on large heterogeneous 
-high-performance systems, including 
-`Lassen <https://hpc.llnl.gov/hardware/compute-platforms/lassen—decommissioned>`_ 
-(IBM POWER9 and NVIDIA Volta V100) and 
-`Tuolumne <https://hpc.llnl.gov/hardware/compute-platforms/tuolumne>`_ (AMD MI300A APU).
+Choose the path that best matches what you want to accomplish.
 
-MC/DC development was initiated by the Center for Exascale Monte Carlo Neutron 
-Transport (`CEMeNT <https://cement-psaap.github.io>`_), a Focused Investigatory Center 
-of the Predictive Science Academic Alliance Program–III 
-(`PSAAP-III <https://psaap.llnl.gov>`_). MC/DC is currently under active development 
-by the Center for Advancing the Radiation Resilience of Electronics 
-(`CARRE <https://carre-psaapiv.org>`_), a Predictive Simulation Center of 
-`PSAAP-IV <https://psaap.llnl.gov>`_. MC/DC is open source 
-(`BSD 3-Clause <https://github.com/CEMeNT-PSAAP/MCDC/blob/main/LICENSE>`_) and 
-welcomes external contributions via `GitHub <https://github.com/CEMeNT-PSAAP/MCDC>`_.
+.. grid:: 1 1 2 2
+   :gutter: 3
+
+   .. grid-item-card:: :octicon:`book;2em` User Guide
+      :link: user_guide/index
+      :link-type: doc
+      :link-alt: Get started and learn how to use MC/DC
+      :class-card: sd-card-hover
+      :text-align: center
+
+      Learn what MC/DC is, install it, run your first simulation, and follow
+      task-oriented guidance for everyday use.
+
+      +++
+      Start here :octicon:`arrow-right`
+
+   .. grid-item-card:: :octicon:`beaker;2em` Theory and Methods
+      :link: theory/index
+      :link-type: doc
+      :link-alt: Study the transport theory and numerical methods in MC/DC
+      :class-card: sd-card-hover
+      :text-align: center
+
+      Study the transport theory, numerical algorithms, and acceleration
+      methods implemented in MC/DC.
+
+      +++
+      Explore the theory :octicon:`arrow-right`
+
+   .. grid-item-card:: :octicon:`code-square;2em` API Reference
+      :link: reference/python_api/index
+      :link-type: doc
+      :link-alt: Look up MC/DC Python classes and methods
+      :class-card: sd-card-hover
+      :text-align: center
+
+      Look up the classes, methods, arguments, and attributes available through
+      MC/DC's Python interface.
+
+      +++
+      Browse the API :octicon:`arrow-right`
+
+   .. grid-item-card:: :octicon:`tools;2em` Developer Guide
+      :link: developer_guide/index
+      :link-type: doc
+      :link-alt: Understand and contribute to MC/DC development
+      :class-card: sd-card-hover
+      :text-align: center
+
+      Understand MC/DC's architecture, extend its implementation, and prepare
+      contributions to the project.
+
+      +++
+      Develop MC/DC :octicon:`arrow-right`
+
+More resources
+--------------
+
+- Learn from complete input decks in :doc:`user_guide/examples/index`.
+- Review the :doc:`MC/DC verification, validation, and performance (VVP)<project/vvp/index>` evidence.
+- Explore the ongoing :doc:`CARRE research program <project/carre>`, its collaboration opportunities, and the :doc:`MC/DC publication record <project/publications>`.
+- Follow the contribution workflow in :doc:`developer_guide/contributing/index`.
 
 .. admonition:: Recommended citation
    :class: tip
 
-   Morgan, Joanna Piper, et al. "Monte Carlo/Dynamic Code (MC/DC): An accelerated 
-   Python package for fully transient neutron transport and rapid methods development." 
-   Journal of Open Source Software 9.96 (2024): 6415. 
-   https://joss.theoj.org/papers/10.21105/joss.06415
-
-------------------------------
-Contents
-------------------------------
+   Morgan, Joanna Piper, et al. "Monte Carlo/Dynamic Code (MC/DC): An accelerated
+   Python package for fully transient neutron transport and rapid methods development."
+   *Journal of Open Source Software* 9.96 (2024): 6415.
+   https://doi.org/10.21105/joss.06415
 
 .. toctree::
-   :maxdepth: 1
-   :caption: User Documentation
+   :hidden:
+   :maxdepth: 2
 
-   install
-   user/index
-   pythonapi/index
-   examples/index
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Developer Documentation
-
-   contribution/index
+   user_guide/index
    theory/index
-
-.. toctree::
-   :maxdepth: 1
-   :caption: References
-
-   publications
-
-.. sidebar-links::
-   :caption: External Links
-   :pypi: mcdc
-   :github:
-
-   CARRE <https://carre-psaapiv.org/>
-   CEMeNT <https://cement-psaap.github.io>
+   reference/index
+   developer_guide/index
+   project/index

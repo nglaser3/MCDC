@@ -15,6 +15,9 @@ import numpy as np
 
 from numba import njit
 
+import mcdc.transport.util as util
+import mcdc.transport.geometry.surface.torus_root_solver as torus_root_solver
+
 from mcdc.constant import (
     COINCIDENCE_TOLERANCE,
     INF,
@@ -79,7 +82,7 @@ def reflect(particle_container, surface):
     y -= B
     z -= C
 
-    # Taking the partial derivitives of the expanded form of the implicit torus equation
+    # Taking the partial derivatives of the expanded form of the implicit torus equation
     dx = 4 * x * (-(r**2) - (R**2) + (x**2) + (y**2) + (z**2))
     dy = 4 * y * (-(r**2) - (R**2) + (x**2) + (y**2) + (z**2))
     dz = 4 * z * (-(r**2) + (R**2) + (x**2) + (y**2) + (z**2))
@@ -93,7 +96,7 @@ def reflect(particle_container, surface):
     # Reflect
     c = 2.0 * (
         nx * ux + ny * uy + nz * uz
-    )  # Magnitutde component of the projection of the particle onto the surface normal
+    )  # Magnitude component of the projection of the particle onto the surface normal
     particle["ux"] -= c * nx
     particle["uy"] -= c * ny
     particle["uz"] -= c * nz
@@ -122,7 +125,7 @@ def get_normal_component(particle_container, surface):
     y -= B
     z -= C
 
-    # Taking the partial derivitives of the expanded form of the implicit torus equation
+    # Taking the partial derivatives of the expanded form of the implicit torus equation
     dx = 4 * x * (-(r**2) - (R**2) + (x**2) + (y**2) + (z**2))
     dy = 4 * y * (-(r**2) - (R**2) + (x**2) + (y**2) + (z**2))
     dz = 4 * z * (-(r**2) + (R**2) + (x**2) + (y**2) + (z**2))
@@ -189,11 +192,14 @@ def get_distance(particle_container, surface):
 
     # TODO: May replace with a fully numba-native quartic solver if torus performance becomes important;
     # np.roots is sufficient for now.
-    coefficients = np.array(
-        [a4 + 0.0j, a3 + 0.0j, a2 + 0.0j, a1 + 0.0j, a0 + 0.0j],
-        dtype=np.complex128,
-    )
-    roots = np.roots(coefficients)
+    coefficients = util.local_array(5, np.complex128)
+    coefficients[0] = a0 + 0.0j
+    coefficients[1] = a1 + 0.0j
+    coefficients[2] = a2 + 0.0j
+    coefficients[3] = a3 + 0.0j
+    coefficients[4] = a4 + 0.0j
+    roots = util.local_array(4, np.complex128)
+    torus_root_solver.solve_quartic(coefficients, roots)
 
     min_t = INF
 

@@ -6,6 +6,8 @@ on:
 jobs:
   build:
     runs-on: self-hosted
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
     - uses: actions/checkout@v3
     - name: Load modules and build python venv
@@ -33,5 +35,4 @@ jobs:
       run: |
           pwd
           source ../ci_testing/bin/activate
-          cd test/regression
-          python run.py --mode=numba --target=gpu
+          python -m pytest -v test/regression --mode=numba --target=gpu

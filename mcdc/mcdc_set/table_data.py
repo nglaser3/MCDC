@@ -59,3 +59,84 @@ def y_chunk(start, length, table_data, data, value):
     start += table_data["y_offset"]
     end = start + length
     data[start:end] = value
+
+
+@njit
+def interpolations(index, table_data, data, value):
+    offset = table_data["interpolations_offset"]
+    data[offset + index] = value
+
+
+@njit
+def interpolations_all(table_data, data, value):
+    start = table_data["interpolations_offset"]
+    size = table_data["interpolations_length"]
+    end = start + size
+    data[start:end] = value
+
+
+@njit
+def interpolations_last(table_data, data, value):
+    start = table_data["interpolations_offset"]
+    size = table_data["interpolations_length"]
+    end = start + size
+    data[end - 1] = value
+
+
+@njit
+def interpolations_chunk(start, length, table_data, data, value):
+    start += table_data["interpolations_offset"]
+    end = start + length
+    data[start:end] = value
+
+
+@njit
+def interpolation_boundaries(index, table_data, data, value):
+    offset = table_data["interpolation_boundaries_offset"]
+    data[offset + index] = value
+
+
+@njit
+def interpolation_boundaries_all(table_data, data, value):
+    start = table_data["interpolation_boundaries_offset"]
+    size = table_data["interpolation_boundaries_length"]
+    end = start + size
+    data[start:end] = value
+
+
+@njit
+def interpolation_boundaries_last(table_data, data, value):
+    start = table_data["interpolation_boundaries_offset"]
+    size = table_data["interpolation_boundaries_length"]
+    end = start + size
+    data[end - 1] = value
+
+
+@njit
+def interpolation_boundaries_chunk(start, length, table_data, data, value):
+    start += table_data["interpolation_boundaries_offset"]
+    end = start + length
+    data[start:end] = value
+
+
+@njit
+def aux_vector(index_1, table_data, data, value):
+    offset = table_data["aux_offset"]
+    stride = table_data["N"]
+    start = offset + index_1 * stride
+    end = start + stride
+    data[start:end] = value
+
+
+@njit
+def aux(index_1, index_2, table_data, data, value):
+    offset = table_data["aux_offset"]
+    stride = table_data["N"]
+    data[offset + index_1 * stride + index_2] = value
+
+
+@njit
+def aux_chunk(start, length, table_data, data, value):
+    start += table_data["aux_offset"]
+    end = start + length
+    data[start:end] = value

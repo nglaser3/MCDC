@@ -3,18 +3,24 @@
 from numba import njit
 
 
+from mcdc.code_factory.array_return import array_return, array_result
+
+
+import numba as nb
+
+
 @njit
 def time_bounds(index, weight_windows, data):
     offset = weight_windows["time_bounds_offset"]
     return data[offset + index]
 
 
-@njit
+@array_return(nb.types.float64)
 def time_bounds_all(weight_windows, data):
     start = weight_windows["time_bounds_offset"]
     size = weight_windows["time_bounds_length"]
     end = start + size
-    return data[start:end]
+    return array_result(data[start:end])
 
 
 @njit
@@ -25,11 +31,11 @@ def time_bounds_last(weight_windows, data):
     return data[end - 1]
 
 
-@njit
+@array_return(nb.types.float64)
 def time_bounds_chunk(start, length, weight_windows, data):
     start += weight_windows["time_bounds_offset"]
     end = start + length
-    return data[start:end]
+    return array_result(data[start:end])
 
 
 @njit
@@ -38,12 +44,12 @@ def energy_bounds(index, weight_windows, data):
     return data[offset + index]
 
 
-@njit
+@array_return(nb.types.float64)
 def energy_bounds_all(weight_windows, data):
     start = weight_windows["energy_bounds_offset"]
     size = weight_windows["energy_bounds_length"]
     end = start + size
-    return data[start:end]
+    return array_result(data[start:end])
 
 
 @njit
@@ -54,11 +60,11 @@ def energy_bounds_last(weight_windows, data):
     return data[end - 1]
 
 
-@njit
+@array_return(nb.types.float64)
 def energy_bounds_chunk(start, length, weight_windows, data):
     start += weight_windows["energy_bounds_offset"]
     end = start + length
-    return data[start:end]
+    return array_result(data[start:end])
 
 
 @njit
@@ -67,12 +73,12 @@ def mu_bounds(index, weight_windows, data):
     return data[offset + index]
 
 
-@njit
+@array_return(nb.types.float64)
 def mu_bounds_all(weight_windows, data):
     start = weight_windows["mu_bounds_offset"]
     size = weight_windows["mu_bounds_length"]
     end = start + size
-    return data[start:end]
+    return array_result(data[start:end])
 
 
 @njit
@@ -83,11 +89,11 @@ def mu_bounds_last(weight_windows, data):
     return data[end - 1]
 
 
-@njit
+@array_return(nb.types.float64)
 def mu_bounds_chunk(start, length, weight_windows, data):
     start += weight_windows["mu_bounds_offset"]
     end = start + length
-    return data[start:end]
+    return array_result(data[start:end])
 
 
 @njit
@@ -96,12 +102,12 @@ def azi_bounds(index, weight_windows, data):
     return data[offset + index]
 
 
-@njit
+@array_return(nb.types.float64)
 def azi_bounds_all(weight_windows, data):
     start = weight_windows["azi_bounds_offset"]
     size = weight_windows["azi_bounds_length"]
     end = start + size
-    return data[start:end]
+    return array_result(data[start:end])
 
 
 @njit
@@ -112,11 +118,11 @@ def azi_bounds_last(weight_windows, data):
     return data[end - 1]
 
 
-@njit
+@array_return(nb.types.float64)
 def azi_bounds_chunk(start, length, weight_windows, data):
     start += weight_windows["azi_bounds_offset"]
     end = start + length
-    return data[start:end]
+    return array_result(data[start:end])
 
 
 @njit
@@ -131,11 +137,11 @@ def lower_weights(index_1, index_2, index_3, index_4, index_5, index_6, index_7,
     return data[offset + index_1 * stride_2 * stride_3 * stride_4 * stride_5 * stride_6 * stride_7 + index_2 * stride_3 * stride_4 * stride_5 * stride_6 * stride_7 + index_3 * stride_4 * stride_5 * stride_6 * stride_7 + index_4 * stride_5 * stride_6 * stride_7 + index_5 * stride_6 * stride_7 + index_6 * stride_7 + index_7]
 
 
-@njit
+@array_return(nb.types.float64)
 def lower_weights_chunk(start, length, weight_windows, data):
     start += weight_windows["lower_weights_offset"]
     end = start + length
-    return data[start:end]
+    return array_result(data[start:end])
 
 
 @njit
@@ -150,11 +156,11 @@ def target_weights(index_1, index_2, index_3, index_4, index_5, index_6, index_7
     return data[offset + index_1 * stride_2 * stride_3 * stride_4 * stride_5 * stride_6 * stride_7 + index_2 * stride_3 * stride_4 * stride_5 * stride_6 * stride_7 + index_3 * stride_4 * stride_5 * stride_6 * stride_7 + index_4 * stride_5 * stride_6 * stride_7 + index_5 * stride_6 * stride_7 + index_6 * stride_7 + index_7]
 
 
-@njit
+@array_return(nb.types.float64)
 def target_weights_chunk(start, length, weight_windows, data):
     start += weight_windows["target_weights_offset"]
     end = start + length
-    return data[start:end]
+    return array_result(data[start:end])
 
 
 @njit
@@ -169,8 +175,8 @@ def upper_weights(index_1, index_2, index_3, index_4, index_5, index_6, index_7,
     return data[offset + index_1 * stride_2 * stride_3 * stride_4 * stride_5 * stride_6 * stride_7 + index_2 * stride_3 * stride_4 * stride_5 * stride_6 * stride_7 + index_3 * stride_4 * stride_5 * stride_6 * stride_7 + index_4 * stride_5 * stride_6 * stride_7 + index_5 * stride_6 * stride_7 + index_6 * stride_7 + index_7]
 
 
-@njit
+@array_return(nb.types.float64)
 def upper_weights_chunk(start, length, weight_windows, data):
     start += weight_windows["upper_weights_offset"]
     end = start + length
-    return data[start:end]
+    return array_result(data[start:end])

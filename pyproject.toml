@@ -1,95 +1,95 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling<1.33", "hatch-vcs<0.6"]
 build-backend = "hatchling.build"
 
 [project]
 name = "mcdc"
-version = "0.12.0"
+dynamic = ["version"]
 
 authors = [
-  { name = "Ilham Variansyah", email = "variansi@oregonstate.edu" },
-  { name = "Sam Pasmann", email = "spasmann@nd.edu" },
-  { name = "Joanna Morgan", email = "morgan83@llnl.gov" },
-  { name = "Kayla Clements", email = "clemekay@oregonstate.edu" },
-  { name = "Braxton Cuneo", email = "bcuneo@seattleu.edu" },
-  { name = "Caleb Shaw" },
-  { name = "Rohan Pankaj" },
-  { name = "Alexander Mote" },
-  { name = "Ethan Lame" },
-  { name = "Benjamin Whewell" },
-  { name = "Ryan G. McClarren" },
-  { name = "Todd S. Palmer" },
-  { name = "Lizhong Chen" },
-  { name = "Dmitriy Y. Anistratov" },
-  { name = "C. T. Kelley" },
-  { name = "Camille J. Palmer" },
-  { name = "Kyle E. Niemeyer" },
+  { name = "MC/DC Development Team" },
 ]
 
-maintainers = [
-  { name = "Ilham Variansyah", email = "variansi@oregonstate.edu" },
-  { name = "Braxton Cuneo", email = "bcuneo@seattleu.edu" },
-  { name = "Kayla Clements", email = "clemekay@oregonstate.edu" },
-  { name = "Joanna Piper Morgan", email = "morgan83@llnl.gov" },
-  { name = "Kyle E. Niemeyer", email = "kyle.niemeyer@oregonstate.edu" },
-]
-
-description = "MC/DC (Monte Carlo Dynamic Code): a performant, scalable, and machine-portable Python-based Monte Carlo neutron transport package"
+description = "A performant, scalable, and machine-portable Python-based Monte Carlo radiation transport code."
 readme = "README.md"
-requires-python = ">=3.10"
-license = { file = "LICENSE" }
+requires-python = ">=3.11"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
 
 keywords = [
-  "Monte Carlo",
+  "monte carlo",
   "nuclear engineering",
-  "neutron transport",
-  "HPC",
-  "GPU",
-  "numba",
-  "mpi4py",
+  "particle transport",
+  "radiation transport",
 ]
 
 classifiers = [
-  "Programming Language :: Python :: 3",
-  "License :: OSI Approved :: BSD License",
+  "Development Status :: 4 - Beta",
+
   "Intended Audience :: Science/Research",
-  "Typing :: Typed",
-  "Natural Language :: English",
-  "Operating System :: Unix",
+
+  "Topic :: Scientific/Engineering",
+  "Topic :: Scientific/Engineering :: Physics",
+
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+
   "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+
+  "Natural Language :: English",
+
+  "Typing :: Typed",
 ]
 
 dependencies = [
-  "numba>=0.60.0",
-  "numpy>=2.0.0",
-  "scipy",
-  "matplotlib",
-  "mpi4py>=3.1.4",
-  "h5py",
-  "colorama",
-  "sympy",
+  "cffi>=1.17.1,<3",
+  "numba>=0.61.0,<0.67",
+  "numpy>=2.0.0,<2.5",
+  "scipy<1.19",
+  "matplotlib<3.12",
+  "mpi4py>=3.1.4,<4.2",
+  "h5py<3.17",
+  "colorama<0.5",
+  "sympy<1.15",
 ]
 
 [project.optional-dependencies]
-docs = [
-  "sphinx==7.2.6",
-  "furo",
-  "sphinx_toolbox",
+dev = [
+  "black<27",
+  "pre-commit<5",
+  "pyright<1.2",
+  "pytest<10",
 ]
 
-dev = [
-  "black",
-  "pre-commit",
-  "pytest",
+docs = [
+  "sphinx>=8,<10",
+  "pydata-sphinx-theme>=0.20,<0.21",
+  "sphinx-design>=0.6,<0.8",
+]
+
+vvp = [
+  "maestrowf",
+  "ply",
 ]
 
 [project.urls]
-Homepage = "https://cement-psaap.github.io/"
-Repository = "https://github.com/CEMeNT-PSAAP/MCDC"
-Documentation = "https://mcdc.readthedocs.io/en/latest/"
-Issues = "https://github.com/CEMeNT-PSAAP/MCDC/issues"
+Homepage = "https://mcdc.readthedocs.io/"
+Documentation = "https://mcdc.readthedocs.io/en/stable/"
+Repository = "https://github.com/mcdc-project/mcdc"
+Issues = "https://github.com/mcdc-project/mcdc/issues"
+"Release Notes" = "https://github.com/mcdc-project/mcdc/releases"
+
+[tool.hatch.version]
+source = "vcs"
 
 [tool.black]
+target-version = ["py311", "py312", "py313", "py314"]
 force-exclude = '''
 (
   mcdc/numba_types\.py
@@ -97,3 +97,25 @@ force-exclude = '''
   | mcdc/mcdc_set/
 )
 '''
+
+[tool.pyright]
+include = ["test/typecheck"]
+pythonVersion = "3.14"
+typeCheckingMode = "strict"
+
+[tool.pytest.ini_options]
+testpaths = ["test/unit"]
+# The slow suite is selected by path (`pytest test/regression`); keep the cloned
+# regression data out of pytest's collection without replacing pytest's defaults.
+norecursedirs = [
+  "*.egg",
+  ".*",
+  "_darcs",
+  "build",
+  "CVS",
+  "dist",
+  "node_modules",
+  "venv",
+  "{arch}",
+  "mcdc-regression_test_data",
+]
