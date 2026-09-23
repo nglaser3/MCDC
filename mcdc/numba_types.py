@@ -588,6 +588,8 @@ weight_windows = into_dtype([
     ('target_weights_length', int64),
     ('upper_weights_offset', int64),
     ('upper_weights_length', int64),
+    ('weights_offset', int64),
+    ('weights_length', int64),
 ])
 
 population_control = into_dtype([

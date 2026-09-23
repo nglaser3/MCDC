@@ -215,6 +215,9 @@ class WeightWindows(MCDCBase):
     upper_weights: Annotated[
         NDArray[np.float64], ("Nt", "Ne", "Nmu", "Na", "Nx", "Ny", "Nz")
     ]
+    weights: Annotated[
+        NDArray[np.float64], ("Nt", "Ne", "Nmu", "Na", "Nx", "Ny", "Nz", "WW")
+    ]
 
     def __init__(self) -> None:
         self.active = False
