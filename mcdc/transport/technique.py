@@ -297,9 +297,11 @@ def get_weight_window_generator(ptype, technique):
 
     return wwg
 
+
 @njit 
 def MAGIC_update(flux_tally, weight_window_object, weight_window_generator, data):
     max_flux = max(tally_get.bin_mean_all(flux_tally, data))
+    lower_scale = 1 / (2 * max_flux)
     target_scale = weight_window_generator["target_scale"]
     upper_scale = weight_window_generator["upper_scale"]
 
@@ -312,7 +314,9 @@ def MAGIC_update(flux_tally, weight_window_object, weight_window_generator, data
                             for iz in range(weight_window_object["Nz"]):
                                 flat_index = int(ww_get.weights_flat_index(it, ie, imu, ia, ix, iy, iz, 0, weight_window_object) / 3)
                                 flux = tally_get.bin_mean(flat_index, flux_tally, data)
-                                ww_value = flux / (2.0 * max_flux)
+                                ww_value = flux * lower_scale
+                                if ww_value <= 0.0:
+                                    continue
                                 ww_set.weights(it, ie, imu, ia, ix, iy, iz, 0, weight_window_object, data, ww_value)
                                 ww_set.weights(it, ie, imu, ia, ix, iy, iz, 1, weight_window_object, data, ww_value * target_scale)
                                 ww_set.weights(it, ie, imu, ia, ix, iy, iz, 2, weight_window_object, data, ww_value * upper_scale)
