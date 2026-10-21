@@ -1,12 +1,13 @@
 from typing import Sequence
 import numpy as np
+import mfem.ser as mfem # serial mfem for I/O
 
 from numpy import float64
 from numpy.typing import NDArray
 
 ####
 
-from mcdc.constant import INF, MESH_STRUCTURED, MESH_UNIFORM
+from mcdc.constant import INF, MESH_STRUCTURED, MESH_UNIFORM, MESH_UNSTRUCTURED
 from mcdc.object_.base import MCDCPolymorphic
 from mcdc.print_ import print_1d_array
 
@@ -203,3 +204,27 @@ class MeshStructured(MeshBase):
         text += f"    - y {print_1d_array(self.y)} cm\n"
         text += f"    - z {print_1d_array(self.z)} cm\n"
         return text
+
+class MeshUnstructured(MeshBase):
+    label = "unstructured_mesh"
+    sub_type = MESH_UNSTRUCTURED
+
+    mesh: mfem.Mesh
+
+    def __init__(
+        self,
+        mesh_file: str,
+        name: str = "",
+    ) -> None:
+        super().__init__(name)
+
+        self.Nx = -1
+        self.Ny = -1
+        self.Nz = -1
+        self.name = name
+        self.mesh = mfem.Mesh(
+            mesh_file,
+            1, # generate mesh connectivity
+            1, # refine the mesh
+        )
+        self.N_bin = self.mesh.GetNE()
