@@ -57,6 +57,7 @@ dependencies = [
   "h5py<3.17",
   "colorama<0.5",
   "sympy<1.15",
+  "mfem>=4.8",
 ]
 
 [project.optional-dependencies]
