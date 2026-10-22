@@ -227,4 +227,4 @@ class MeshUnstructured(MeshBase):
             1, # generate mesh connectivity
             1, # refine the mesh
         )
-        self.N_bin = self.mesh.GetNE()
+        self.N_bin = self.mesh.GetGlobalNE()
