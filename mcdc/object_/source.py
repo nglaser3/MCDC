@@ -19,6 +19,7 @@ from mcdc.object_.distribution import (
     DistributionMultiTable,
     DistributionPMF,
     DistributionTabulated,
+    DistributionNone,
 )
 from mcdc.object_.util import move_object, parse_particle_type, decode_particle_type
 from mcdc.print_ import print_error
@@ -239,8 +240,11 @@ class Source(MCDCObject):
     y: Annotated[NDArray[float64], (2,)]
     z: Annotated[NDArray[float64], (2,)]
     x_pdf: DistributionTabulated
+    biased_x_pdf: DistributionBase
     y_pdf: DistributionTabulated
+    biased_y_pdf: DistributionBase
     z_pdf: DistributionTabulated
+    biased_z_pdf: DistributionBase
 
     # Direction
     isotropic_direction: bool
@@ -252,7 +256,9 @@ class Source(MCDCObject):
     polar_cosine: Annotated[NDArray[float64], (2,)]
     azimuthal: Annotated[NDArray[float64], (2,)]
     polar_cosine_pdf: DistributionTabulated
+    biased_mu_pdf: DistributionBase
     azimuthal_pdf: DistributionTabulated
+    biased_azimuthal_pdf: DistributionBase
 
     # Energy
     mono_energetic: bool
@@ -261,6 +267,7 @@ class Source(MCDCObject):
     energy_at_polar_cosine_is_distribution: bool
     energy: float
     energy_pdf: DistributionTabulated
+    biased_energy_pdf: DistributionBase
     energy_pmf: DistributionPMF
     energy_at_polar_cosine: NDArray[float64]
     energy_at_polar_cosine_distribution: DistributionBase
@@ -271,6 +278,7 @@ class Source(MCDCObject):
     time: float
     time_range: Annotated[NDArray[float64], (2,)]
     time_pdf: DistributionTabulated
+    biased_time_pdf: DistributionBase
 
     # Misc.
     particle_type: int
@@ -336,8 +344,11 @@ class Source(MCDCObject):
             np.array([1.0, 1.0]),
         )
         self.x_pdf = spatial_pdf
+        self.biased_x_pdf = DistributionNone()
         self.y_pdf = spatial_pdf
+        self.biased_y_pdf = DistributionNone()
         self.z_pdf = spatial_pdf
+        self.z_pdf = DistributionNone()
 
         # Direction
         self.isotropic_direction = True
@@ -352,10 +363,12 @@ class Source(MCDCObject):
             np.array([-1.0, 1.0]),
             np.array([1.0, 1.0]),
         )
+        self.biased_mu_pdf = DistributionNone()
         self.azimuthal_pdf = DistributionTabulated(
             np.array([0.0, 2.0 * PI]),
             np.array([1.0, 1.0]),
         )
+        self.biased_azimuthal_pdf = DistributionNone()
 
         # Energy
         self.mono_energetic = True
@@ -367,6 +380,7 @@ class Source(MCDCObject):
             np.array([1.0e6 - 1.0, 1.0e6 + 1.0]),
             np.array([1.0, 1.0]),
         )
+        self.biased_energy_pdf = DistributionNone()
         self.energy_pmf = DistributionPMF(np.array([1.0e6]), np.array([1.0]))
         self.energy_at_polar_cosine = np.zeros(0)
         self.energy_at_polar_cosine_distribution = self.energy_pdf
@@ -380,6 +394,7 @@ class Source(MCDCObject):
             np.array([0.0, 1.0]),
             np.array([1.0, 1.0]),
         )
+        self.biased_time_pdf = DistributionNone()
 
         # Particle type
         self.particle_type = PARTICLE_NEUTRON
@@ -703,6 +718,33 @@ class Source(MCDCObject):
         ... )
         """
         move_object(self, velocities, durations)
+
+    def bias(
+        self,
+        *,
+        x_bias: DistributionBase | None = None,
+        y_bias: DistributionBase | None = None,
+        z_bias: DistributionBase | None = None,
+        mu_bias: DistributionBase | None = None,
+        azimuthal_bias: DistributionBase | None = None,
+        energy_bias: DistributionBase | None = None,
+        time_bias: DistributionBase | None = None,
+        ):
+        if x_bias:
+            self.biased_x_pdf = x_bias
+        if y_bias:
+            self.biased_y_pdf = y_bias
+        if z_bias:
+            self.biased_z_pdf = z_bias
+        if mu_bias:
+            self.biased_mu_pdf = mu_bias
+        if azimuthal_bias:
+            self.biased_azimuthal_pdf = azimuthal_bias
+        if energy_bias:
+            self.biased_energy_pdf = energy_bias
+        if time_bias:
+            self.biased_time_pdf = time_bias
+        return
 
 
 # ======================================================================================
