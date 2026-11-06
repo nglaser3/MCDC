@@ -348,7 +348,7 @@ class Source(MCDCObject):
         self.y_pdf = spatial_pdf
         self.biased_y_pdf = DistributionNone()
         self.z_pdf = spatial_pdf
-        self.z_pdf = DistributionNone()
+        self.biased_z_pdf = DistributionNone()
 
         # Direction
         self.isotropic_direction = True

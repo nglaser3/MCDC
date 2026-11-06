@@ -29,8 +29,68 @@ def source_particle(particle_container, seed, simulation, data):
     source_cdf = mcdc_get.simulation.source_cdf_all(simulation, data)
     source_idx = find_bin_with_rules(xi, source_cdf, 0.0, False)
     source = simulation["sources"][source_idx]
+    weight = 1.0
 
     # Position
+    (x, y, z), multiplier = sample_position(particle_container, source, simulation, data)
+    weight *= multiplier
+
+    # Direction
+    (ux, uy, uz), (mu, polar_interval), multiplier = sample_direction(particle_container, source, simulation, data)
+    weight *= multiplier
+
+    # Energy
+    E, multiplier = sample_energy(particle_container, source, mu, polar_interval, simulation, data)
+    weight *= multiplier
+
+    # Time
+    t, multiplier = sample_time(particle_container, source, simulation, data)
+    weight *= multiplier
+
+    # Motion translation
+    if source["moving"]:
+        dx, dy, dz = motion_translation(t, source, data)
+        x += dx
+        y += dy
+        z += dz
+
+    # Make and return particle
+    particle["x"] = x
+    particle["y"] = y
+    particle["z"] = z
+    particle["t"] = t
+    particle["ux"] = ux
+    particle["uy"] = uy
+    particle["uz"] = uz
+    particle["E"] = E
+    particle["w"] = weight
+    particle["particle_type"] = source["particle_type"]
+
+
+@njit
+def sample_position(particle_container, source, simulation, data):
+    """
+    Sample particle position.
+
+    Parameters
+    ----------
+    particle_container : ndarray
+        Container holding the particle.
+    source : object 
+        Source object from simulation containing distributions.
+    simulation : object
+        Simulation state containing distributions.
+    data : object
+        Simulation data for array access.
+
+    Returns
+    -------
+    (x, y, z) : Tuple[float]
+        Sampled particle position.
+    weight_multiplier : float
+        Multiplier for biasing particle weights. Default 1.0.
+    """
+    weight_multiplier = 1.0
     if source["point_source"]:
         x = source["point"][0]
         y = source["point"][1]
@@ -60,8 +120,35 @@ def source_particle(particle_container, seed, simulation, data):
             simulation,
             data,
         )
+    return (x, y, z), weight_multiplier
 
-    # Direction
+
+@njit
+def sample_direction(particle_container, source, simulation, data):
+    """
+    Sample particle direction.
+
+    Parameters
+    ----------
+    particle_container : ndarray
+        Container holding the particle.
+    source : object 
+        Source object from simulation containing distributions.
+    simulation : object
+        Simulation state containing distributions.
+    data : object
+        Simulation data for array access.
+
+    Returns
+    -------
+    (ux, uy, uz) : Tuple[float]
+        Sampled particle direction.
+    (mu, polar_interval) : float
+    weight_multiplier : float
+        Multiplier for biasing particle weights. Default 1.0.
+    """
+    weight_multiplier = 1.0
+    mu = 0.0
     polar_interval = 0
     if source["isotropic_direction"]:
         ux, uy, uz = sample_isotropic_direction(particle_container)
@@ -113,7 +200,36 @@ def source_particle(particle_container, seed, simulation, data):
 
         ux, uy, uz = direction_from_angles(mu, azi, source["direction"])
 
-    # Energy
+    return (ux, uy, uz), (mu, polar_interval), weight_multiplier
+
+
+@njit
+def sample_energy(particle_container, source, mu, polar_interval, simulation, data):
+    """
+    Sample particle energy.
+
+    Parameters
+    ----------
+    particle_container : ndarray
+        Container holding the particle.
+    source : object 
+        Source object from simulation containing distributions.
+    mu : float
+        Polar cosine.
+    polar_interval : float
+    simulation : object
+        Simulation state containing distributions.
+    data : object
+        Simulation data for array access.
+
+    Returns
+    -------
+    E : float
+        Sampled particle energy.
+    weight_multiplier : float
+        Multiplier for biasing particle weights. Default 1.0.
+    """
+    weight_multiplier= 1.0
     if source["energy_at_polar_cosine_active"]:
         if source["energy_at_polar_cosine_is_distribution"]:
             ID = source["energy_at_polar_cosine_distribution_ID"]
@@ -145,7 +261,33 @@ def source_particle(particle_container, seed, simulation, data):
             source["energy_pdf_ID"], particle_container, simulation, data
         )
 
-    # Time
+    return E, weight_multiplier
+
+
+@njit
+def sample_time(particle_container, source, simulation, data):
+    """
+    Sample particle time.
+
+    Parameters
+    ----------
+    particle_container : ndarray
+        Container holding the particle.
+    source : object 
+        Source object from simulation containing distributions.
+    simulation : object
+        Simulation state containing distributions.
+    data : object
+        Simulation data for array access.
+
+    Returns
+    -------
+    t : float
+        Sampled particle time.
+    weight_multiplier : float
+        Multiplier for biasing particle weights. Default 1.0.
+    """
+    weight_multiplier = 1.0
     if source["discrete_time"]:
         t = source["time"]
     elif source["uniform_time"]:
@@ -156,46 +298,55 @@ def source_particle(particle_container, seed, simulation, data):
         t = _sample_source_tabulated(
             source["time_pdf_ID"], particle_container, simulation, data
         )
+    return t, weight_multiplier 
 
-    # Motion translation
-    if source["moving"]:
-        # Get moving interval index wrt the given time
-        time_grid = mcdc_get.source.move_time_grid_all(source, data)
 
-        tolerance = COINCIDENCE_TOLERANCE_TIME
-        go_lower = False
-        idx = find_bin_with_rules(t, time_grid, tolerance, go_lower)
+@njit
+def motion_translation(t, source, data):
+    """
+    Determine motion translation.
 
-        # Coinciding cases
-        if abs(time_grid[idx + 1] - t) < COINCIDENCE_TOLERANCE:
-            idx += 1
+    Parameters
+    ----------
+    t : float
+        Time.
+    source : object 
+        Source object from simulation containing distributions.
+    data : object
+        Simulation data for array access.
 
-        # Source move translations
-        trans_0 = mcdc_get.source.move_translations_vector(idx, source, data)
+    Returns
+    -------
+    (dx, dy, dz) : Tuple[float, float, float]
+        Translated distances.
+    """
+    # Get moving interval index wrt the given time
+    time_grid = mcdc_get.source.move_time_grid_all(source, data)
 
-        # Source move velocities
-        V = mcdc_get.source.move_velocities_vector(idx, source, data)
+    tolerance = COINCIDENCE_TOLERANCE_TIME
+    go_lower = False
+    idx = find_bin_with_rules(t, time_grid, tolerance, go_lower)
 
-        # Source move time grid
-        time_0 = mcdc_get.source.move_time_grid(idx, source, data)
+    # Coinciding cases
+    if abs(time_grid[idx + 1] - t) < COINCIDENCE_TOLERANCE:
+        idx += 1
 
-        # Translate the particle
-        t_local = t - time_0
-        x += trans_0[0] + V[0] * t_local
-        y += trans_0[1] + V[1] * t_local
-        z += trans_0[2] + V[2] * t_local
+    # Source move translations
+    trans_0 = mcdc_get.source.move_translations_vector(idx, source, data)
 
-    # Make and return particle
-    particle["x"] = x
-    particle["y"] = y
-    particle["z"] = z
-    particle["t"] = t
-    particle["ux"] = ux
-    particle["uy"] = uy
-    particle["uz"] = uz
-    particle["E"] = E
-    particle["w"] = 1.0
-    particle["particle_type"] = source["particle_type"]
+    # Source move velocities
+    V = mcdc_get.source.move_velocities_vector(idx, source, data)
+
+    # Source move time grid
+    time_0 = mcdc_get.source.move_time_grid(idx, source, data)
+
+    # Translate the particle
+    t_local = t - time_0
+
+    dx = trans_0[0] + V[0] * t_local
+    dy = trans_0[1] + V[1] * t_local
+    dz = trans_0[2] + V[2] * t_local
+    return dx, dy, dz
 
 
 @njit
